@@ -15,8 +15,8 @@ class GifDropzone extends Component {
   render() {
     const { connectDropTarget, isOver, canDrop, src } = this.props;
     const defaultStyles = {
-      //position: 'relative',
-      //border: '3px solid #333'
+      position: 'relative',
+      //border: '3px solid #333',
       width: "auto",
       height: "auto",
       padding: "4px"

@@ -9,7 +9,12 @@ import urls from "../constants/urls";
 //import mockResponse from '../constants/mockResponse';
 import logoUrl from "../logo.svg";
 import GiphyApi from "../api/giphyapi";
-import { applyFilter,resolveFilter, Filters } from "../common/util";
+import {
+  applyFilter,
+  resolveFilter,
+  Filters,
+  setPlaceHolderResult
+} from "../common/util";
 import toastr from "toastr";
 
 const sidebarWidth = 300;
@@ -91,11 +96,12 @@ const StyledAppContainer = styled.div`
   width: auto;
   flex-shrink: 0;
   height: 99%;
+  margin-right:10px;
 }
 #overlay {
   position: fixed;
   width: 100%;
-  height: 45%;
+  height: 100%;
   top: 0;
   left: 0;
   right: 0;
@@ -111,9 +117,10 @@ class App extends Component {
   constructor() {
     super();
     this.state = {
+      placeholderResult: {},
       placeholder1: {
         url:
-          "1https://media2.giphy.com/media/7PhtBb0dmmoRW/200.gif?cid=e1bb72ff5c7d444c624a616849d9884b",
+          "https://media2.giphy.com/media/7PhtBb0dmmoRW/200.gif?cid=e1bb72ff5c7d444c624a616849d9884b",
         id: "7PhtBb0dmmoRW",
         details: {
           title: "aul rudd coldplay GIF",
@@ -123,8 +130,8 @@ class App extends Component {
       },
       placeholder2: {
         url:
-          "1https://media2.giphy.com/media/7PhtBb0dmmoRW/200.gif?cid=e1bb72ff5c7d444c624a616849d9884b",
-        id: "7PhtBb0dmmoRW",
+          "https://media0.giphy.com/media/GJhuSjRUPw4co/giphy.gif?cid=e1bb72ff5c7d444c624a616849d9884b",
+        id: "GJhuSjRUPw4co",
         details: {
           title: "aul rudd coldplay GIF",
           username: "dummy1",
@@ -133,8 +140,8 @@ class App extends Component {
       },
       placeholder3: {
         url:
-          "1https://media2.giphy.com/media/7PhtBb0dmmoRW/200.gif?cid=e1bb72ff5c7d444c624a616849d9884b",
-        id: "7PhtBb0dmmoRW",
+          "https://media2.giphy.com/media/sjCMt7gtx0Muc/giphy.gif?cid=e1bb72ff5c7d444c624a616849d9884b",
+        id: "sjCMt7gtx0Muc",
         details: {
           title: "aul rudd coldplay GIF",
           username: "dummy1",
@@ -143,8 +150,8 @@ class App extends Component {
       },
       placeholder4: {
         url:
-          "1https://media2.giphy.com/media/7PhtBb0dmmoRW/200.gif?cid=e1bb72ff5c7d444c624a616849d9884b",
-        id: "7PhtBb0dmmoRW",
+          "https://media0.giphy.com/media/sh3y88tgOINC8/giphy.gif?cid=e1bb72ff5c7fe1a2696562466709eb78",
+        id: "sh3y88tgOINC8",
         details: {
           title: "aul rudd coldplay GIF",
           username: "dummy1",
@@ -154,7 +161,7 @@ class App extends Component {
       limit: 25,
       offset: 0,
       filter: Filters.ALL,
-      dimension: 'Original',
+      dimension: "Original",
       textSearch: "",
       result: {},
       isLoading: false
@@ -164,6 +171,7 @@ class App extends Component {
     this.onScrollChange = this.onScrollChange.bind(this);
     this.onFilter = this.onFilter.bind(this);
     this.onShowInfo = this.onShowInfo.bind(this);
+    this.getImagesByID = this.getImagesByID.bind(this);
   }
 
   renderSwatch(r) {
@@ -177,8 +185,6 @@ class App extends Component {
     );
   }
 
-  
-
   onShowInfo(_obj) {
     let _id = _obj.target.id;
     let obj = this.state[_id];
@@ -187,6 +193,7 @@ class App extends Component {
     }.User for this image is ${obj.details.username}`;
     toastr["info"]("Details", _msg);
   }
+
   onScrollChange(obj) {
     let _half = (obj.target.scrollWidth * 99) / 100;
     _half =
@@ -201,24 +208,137 @@ class App extends Component {
     ) {
       this.setState({ isLoading: true });
 
-      GiphyApi.geOtherImages(_offset, _limit, this.state.textSearch)
-        .then(response => {
-          this.setState({ offset: response.pagination.offset + _limit });
-          this.setState({ result: response });
-          this.setState({ isLoading: false });
+      GiphyApi.getImages(_offset, _limit, this.state.textSearch)
+        .then(response => response.json())
+        .then(data => {
+          this.setState({
+            offset: data.pagination.offset + _limit,
+            result: data,
+            isLoading: false
+          });
         })
-        .catch(error => this.setState({ error }));
+        .catch(error => {
+          toastr.error(error);
+          this.setState({ error, isLoading: false });
+        });
     } else if (
       (obj.target.scrollLeft <= 10 && this.state.offset !== 0) ||
       obj.target.id === "Previous"
     ) {
       this.setState({ isLoading: true });
       GiphyApi.getImages(_offset - _limit, _limit, this.state.textSearch)
-        .then(response => {
-          this.setState({ offset: response.pagination.offset });
-          this.setState({ result: response });
-          this.setState({ isLoading: false });
+        .then(response => response.json())
+        .then(data => {
+          this.setState({
+            offset: data.pagination.offset,
+            result: data,
+            isLoading: false
+          });
+
           toastr.success("Processing Next Page");
+        })
+        .catch(error => {
+          toastr.error(error);
+          this.setState({ error, isLoading: false });
+        });
+    }
+  }
+
+  onFilter(obj) {
+    this.setState({ dimension: obj.target.value });
+
+    let _property = resolveFilter(obj.target.value);
+
+    if (_property === "filters") {
+      this.setState({ filter: obj.target.value });
+      return;
+    }
+
+    let _result = this.state.result;
+    let _placeHolder1, _placeHolder2, _placeHolder3, _placeHolder4;
+
+    if (_result.data != null) {
+      _placeHolder1 = setPlaceHolderResult(
+        _result,
+        this.state.placeholder1.id,
+        this.state.placeholderResult
+      );
+      _placeHolder2 = setPlaceHolderResult(
+        _result,
+        this.state.placeholder2.id,
+        this.state.placeholderResult
+      );
+      _placeHolder3 = setPlaceHolderResult(
+        _result,
+        this.state.placeholder3.id,
+        this.state.placeholderResult
+      );
+      _placeHolder4 = setPlaceHolderResult(
+        _result,
+        this.state.placeholder4.id,
+        this.state.placeholderResult
+      );
+
+      this.setState({
+        placeholder1: {
+          id: _placeHolder1.id,
+          url: _placeHolder1.images[_property].url,
+          details: {
+            title: _placeHolder1.title,
+            username: _placeHolder1.username,
+            source: _placeHolder1.source
+          }
+        },
+        placeholder2: {
+          id: _placeHolder2.id,
+          url: _placeHolder2.images[_property].url,
+          details: {
+            title: _placeHolder2.title,
+            username: _placeHolder2.username,
+            source: _placeHolder2.source
+          }
+        },
+        placeholder3: {
+          id: _placeHolder3.id,
+          url: _placeHolder3.images[_property].url,
+          details: {
+            title: _placeHolder3.title,
+            username: _placeHolder3.username,
+            source: _placeHolder3.source
+          }
+        },
+        placeholder4: {
+          id: _placeHolder4.id,
+          url: _placeHolder4.images[_property].url,
+          details: {
+            title: _placeHolder4.title,
+            username: _placeHolder4.username,
+            source: _placeHolder4.source
+          }
+        }
+      });
+    }
+  }
+
+  getImagesByID() {
+    let result = this.state.result;
+    let _result = {};
+    _result.data = [];
+    let _ids = [];
+    ["placeholder1", "placeholder2", "placeholder3", "placeholder4"].map(a => {
+      let _findObj = result.data.find(x => x.id === this.state[a].id);
+      if (_findObj === undefined) {
+        _ids.push(this.state[a].id);
+      } else {
+        _result.data.push(_findObj);
+      }
+    });
+    if (_ids.length > 0) {
+      GiphyApi.geImagesByIds(_ids)
+        .then(response => {
+          console.log(response);
+          _result.data.push(response.data);
+          this.setState({ placeholderResult: _result });
         })
         .catch(error => {
           toastr.error(error);
@@ -227,68 +347,16 @@ class App extends Component {
     }
   }
 
-  onFilter(obj) {
-    this.setState({ dimension: obj.target.value });
-    
-    let _property = resolveFilter(obj.target.value);
-
-    if(_property ==="filters"){
-      this.setState({ filter: obj.target.value });
-      return;
-
-    }
-
-    let _result = this.state.result;
-    if (_result.data!=null) {
-      let _placeHolder1 = _result.data.find(
-        x => x.id === this.state.placeholder1.id
-      );
-      this.setState({
-        placeholder1: {
-          id: _placeHolder1.id,
-          url:  _placeHolder1.images[_property].url
-        }
-      });
-
-      let _placeHolder2 = _result.data.find(
-        x => x.id === this.state.placeholder2.id
-      );
-      this.setState({
-        placeholder2: {
-          id: _placeHolder2.id,
-          url: _placeHolder2.images[_property].url
-        }
-      });
-
-      let _placeHolder3 = _result.data.find(
-        x => x.id === this.state.placeholder3.id
-      );
-      this.setState({
-        placeholder3: {
-          id: _placeHolder3.id,
-          url: _placeHolder3.images[_property].url
-        }
-      });
-
-      let _placeHolder4 = _result.data.find(
-        x => x.id === this.state.placeholder4.id
-      );
-      this.setState({
-        placeholder4: {
-          id: _placeHolder4.id,
-          url :_placeHolder4.images[_property].url
-        }
-      });
-    }
-  }
   onTextChange(obj) {
     let _limit = this.state.limit;
     let _offset = this.state.offset;
     this.setState({ textSearch: obj.target.value });
     GiphyApi.getImages(_offset, _limit, obj.target.value)
-      .then(response => {
-        this.setState({ result: response });
-        this.setState({ offset: _limit });
+      //.then(response => response.json())
+      .then(data => {
+        this.setState({ result: data, offset: _limit });
+        // this.setState({offset:_limit});
+        this.getImagesByID();
         toastr.success("Search Completed.");
       })
       .catch(error => {
@@ -296,6 +364,7 @@ class App extends Component {
         this.setState({ error });
       });
   }
+
   onLimitChange(obj) {
     this.setState({ limit: obj.target.value });
   }
@@ -306,19 +375,28 @@ class App extends Component {
       let _item = result.data.filter(i => i.id === component.id);
 
       let _property = resolveFilter(this.state.dimension);
-      
-        this.setState({
-          [name]: {
-            url: _item[0].images[_property].url,
-            id: component.id,
-            details: {
-              title: _item[0].title,
-              username: _item[0].username,
-              source: _item[0].source
-            }
-          } //.fixed_width.url
-        });
-      
+
+      this.setState({
+        [name]: {
+          url: _item[0].images[_property].url,
+          id: component.id,
+          details: {
+            title: _item[0].title,
+            username: _item[0].username,
+            source: _item[0].source
+          }
+        } //.fixed_width.url
+      });
+
+      let _result = this.state.placeholderResult;
+      var foundIndex =
+        _result.data != null
+          ? _result.data.findIndex(x => x.id === component.id)
+          : -1;
+      if (foundIndex > 0) {
+        _result[foundIndex] = _item[0];
+        this.setState({ placeholderResult: _result });
+      }
     }
   }
   deleteItem = id => {
@@ -351,47 +429,47 @@ class App extends Component {
           <main className="main">
             <div className="row" style={{ width: "99%" }}>
               <div style={{ width: "99%" }}>
-                <input 
+                <input
                   className="search-input"
                   name="search"
                   placeholder="Search"
                   onChange={this.onTextChange.bind(this)}
                 />
 
-          <label htmlFor="selOptions" style={{margin:"6px"}}>Filter Options</label>
+                <label htmlFor="selOptions" style={{ margin: "6px" }}>
+                  Filter Options
+                </label>
 
-            <select id="selOptions" onChange ={this.onFilter} style={{margin:"4px"}}>
-                <optgroup label="Dimesions" ></optgroup>
-                <option value={Filters.ORIGINAL}>Original</option>
-                <option value={Filters.SAMEHEIGHT}>Same Height</option>
-                <option value={Filters.SAMEWIDTH}>Same Width</option>
-                <optgroup label="Filters"></optgroup>
-                <option value={Filters.ALL}>{Filters.ALL}</option>
-                <option value={Filters.PARENTAL}>{Filters.PARENTAL}</option>
-                <option value={Filters.PG13}>{Filters.PG13}</option>
-                <option value={Filters.GENERAL}>{Filters.GENERAL}</option>
-                <option value={Filters.STICKER}>{Filters.STICKER}</option>
-                <option value={Filters.SCORE}>{Filters.SCORE}</option>
-                <option value={Filters.TRENDING}>{Filters.TRENDING}</option>
+                <select
+                  id="selOptions"
+                  onChange={this.onFilter}
+                  style={{ margin: "4px" }}
+                >
+                  <optgroup label="---Filter DropZone---" />
+                  <option value={Filters.ORIGINAL}>Original</option>
+                  <option value={Filters.SAMEHEIGHT}>Same Height</option>
+                  <option value={Filters.SAMEWIDTH}>Same Width</option>
+                  <optgroup label="---Filter Search Result ---" />
+                  <option value={Filters.ALL}>{Filters.ALL}</option>
+                  <option value={Filters.PARENTAL}>{Filters.PARENTAL}</option>
+                  <option value={Filters.PG13}>{Filters.PG13}</option>
+                  <option value={Filters.GENERAL}>{Filters.GENERAL}</option>
+                  <option value={Filters.STICKER}>{Filters.STICKER}</option>
+                  <option value={Filters.SCORE}>{Filters.SCORE}</option>
+                  <option value={Filters.TRENDING}>{Filters.TRENDING}</option>
                 </select>
-                
-               
-              
+
                 <input
                   className="search-input"
                   type="number"
                   id="limit"
                   name="limit"
-                  placeholder="Select the Limit"
+                  placeholder="Limit"
                   min="5"
                   max="100"
                   style={{ width: "10%" }}
                   onChange={this.onLimitChange}
                 />
-
-
-                
-              
               </div>
               <div
                 id="overlay"
